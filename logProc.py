@@ -6,7 +6,7 @@ def init_log():
 	'日志记录窗口'
 	log_format = '%(filename)s,lineno:%(lineno)d [%(asctime)s] %(message)s'
 	logging.basicConfig(format = log_format,datefmt='%Y-%m-%d %H:%M:%S %p',\
-						filename='/fwlog/log/uploadParsefile_log')
+						filename='/var/log/uploadParsefile_log')
 
 
 def del_log():	

@@ -4,7 +4,7 @@
 function create_table()
 {
 	
-	mysqlCall='mysql -uroot -proot FW_LOG_fwlog -e'
+	mysqlCall='mysql -uroot -pwoshishui FW_LOG_fwlog -e'
 	
 	local TABLE_NAME=$1
 	local create_sql="$2"
