@@ -3,15 +3,12 @@
 
 import common
 
-s_key_value = 'M10crashlog'
-s_module_filename = 'sys_crash.txt'
 
+class M10crashlogParse(object):
+    def __init__(self):
+        self.key = 'M10crashlog'
+        self.module_filename = 'sys_crash.txt'
+    def run(self,dirname , file):
+        self.common = common.Common()
+        return self.common.common_proc(dirname , file ,self.key ,self.module_filename )
 
-def run(dirname , file):
-	global s_key_value
-	global s_module_filename
-	return common.common_proc(dirname , file ,s_key_value , s_module_filename )
-
-
-def init_func():
-	pass

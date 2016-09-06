@@ -3,16 +3,17 @@
 
 import sqlProc as sql
 import logProc as log
-import time
+#import time
 import sys
+import datetime
 
 class DbDataOpr(object):
     def __init__(self):
         self.dev_id = ""
         self.record_date = ""
-        self.debug_flag = 1
+        self.debug_flag = 0
         self.sql_info = self.init_sql_arr()
-    def init_sql_arr():
+    def init_sql_arr(self):
         s_sql_info = {}
         s_sql_info['BASE'] = "insert into QualityMonitorBaseInfo (gataway_id,\
                            dev_name,hw_info,dev_ip,last_crash_time,days_run,\
@@ -47,9 +48,9 @@ class DbDataOpr(object):
             return True
         print 'start to proc data tables '
         self.dev_id = dict['BASE']['dev_id']
-        self.record_date = dict['BASE']['device_time']
+        self.record_date = datetime.datetime.strptime(dict['BASE']['device_time'],'%Y%m%d %H:%M:%S')
 
-        self.exec_base_table_data(dict,except_flag)
+        self.exec_base_table_data(dict,flag)
         self.exec_except_table_data(dict)
         self.common_module_proc_table(dict)
         self.exec_cpu_and_mem_info(dict)
@@ -60,47 +61,55 @@ class DbDataOpr(object):
         if self.debug_flag == 1:
             print data
         
-    def common_data_proc(dict,name):
+    def common_data_proc(self,dict,name):
+        if not dict or  not dict[name]:
+            return ""
         common_data = {}
         common_data = dict[name]
-        common_data_len = len(common_data)
-        if common_data_len == 0:
-            print '²»´æÔÚ[%s]Òì³£ÐÅÏ¢' %name
-        return 	(common_data_len,common_data)
+        return 	common_data
 
-    def strcat_sql(data,len):
-        '''¸ù¾Ý»ñÈ¡µÄÊý¾Ý½øÐÐÆ´½Ó'''
-        global s_dev_id
+    def strcat_sql(self,data):
+        ''''''
+        if not data:
+            return ""
         common_data_info = ""
-        
-        for index  in range(1,len + 1 , 1):
-            common_data_info += '(\'' \
-                        + s_dev_id + '\', \''\
-                        + data[index] + '\',\''\
-                        + s_record_date + '\')'
-            if index != len:
+        key_len = len(data)
+        for index  in range(1,key_len + 1 , 1):
+            common_data_info += "('%s','%s','%s')" %(self.dev_id,data[index],self.record_date)
+            if index != key_len:
                 common_data_info += ','
-        return (True,common_data_info)		
+        return common_data_info		
         
-    def get_sql_values(dict,name):
+    def get_sql_values(self,dict,name):
         '''¸ù¾Ý½âÎö³öÀ´µÄÖµ½øÐÐsql×Ö·û´®µÄÆ´½Ó''' 
-        (common_data_len , common_data) = common_data_proc(dict,name)
-        if common_data_len == 0 :
-            return (False,"")
+        common_data = self.common_data_proc(dict,name)
+        if not common_data :
+            return ""
             
-        show_parse_data(common_data)	
-        return strcat_sql(common_data,common_data_len)
+        self.show_parse_data(common_data)	
+        return self.strcat_sql(common_data)
+    
+    def exec_sql_opr(self,sql_str):
+        '''¿¿¿¿¿¿¿¿¿¿'''
+        if not sql:
+            print '¿¿¿¿¿¿¿¿¿¿¿'
+            raise
+ #       print sql_str    
+        try:
+            sql.sql_exec(sql_str)
+        except:
+            raise
+        return True
 
-        
     def exec_base_table_data(self,dict,flag):
-        '¿¿¿¿¿¿¿¿¿¿'
+        '''»ù±¾±í´¦ÀíÐÅÏ¢'''
         if not dict:
             return True
         base_info = {}
         base_info = self.common_data_proc(dict,'BASE')
         if not base_info:
             return False
-        sql_str = "%s%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)" %(\
+        sql_str = "%s'%s','%s','%s','%s','%s','%s','%s','%s','%s|%s','%s','%s','%s')" %(\
                    self.sql_info['BASE'], base_info['dev_id'],
                                base_info['customer'] ,
                                base_info['hard_plat'],
@@ -111,42 +120,36 @@ class DbDataOpr(object):
                                base_info['device_plat'],
                                base_info['storage_plat'],
                                dict['STORAGE_CHECK']['capacity'],
-                               base_info['device_vervion'],
+                               base_info['device_version'],
                                self.record_date ,flag)
-        sql.sql_exec(sql_str)
-        return True
+        return self.exec_sql_opr(sql_str)
         
 
     def get_last_insert_sql(self,name,common_sql_info):
         '''»ñÈ¡×îºó¿ÉÒÔ²åÈëµ½Êý¾Ý¿âÖÐµÄsql'''
         sql_str = self.sql_info[name] + common_sql_info
-        try :
-            sql.sql_exec(sql_str)	
-        except:
-            log.error("name:[%s],common_sql_info:[%s]",name,common_sql_info)
-            return False
-        return True	
+        return 	self.exec_sql_opr(sql_str)
         
     def common_proc_table_data(self,dict,name):
-        (rtn , common_sql_info) = self.et_sql_values(dict,name)
-        if rtn == False:
+        common_sql_info = self.get_sql_values(dict,name)
+        if not common_sql_info:
             return False
-            
+
         self.show_parse_data(common_sql_info)
         return self.get_last_insert_sql(name,common_sql_info)	
      
     def common_module_proc_table(self,dict):
-        '¿¿¿¿¿¿¿¿¿'
-        module_list = ['ZOMBIE' , 'CORE_DUMP','CORE_MODULE','CORE_PROCESS','CORE_CONF','OPENED_PORT']
+        '''Í¨ÓÃÄ£¿é´¦ÀíÐÅÏ¢'''
+        module_list = ['ZOMBIE' , 'CORE_DUMP','CORE_MODULE',\
+                        'CORE_PROCESS','CORE_CONF','OPENED_PORT']
         module_list_len = len(module_list)
-        for index in range(module_list):
+        for index in range(module_list_len):
             self.common_proc_table_data(dict,module_list[index])
         return True    
         
 
     def exec_cpu_and_mem_info(self,dict):
         '´¦ÀíÒì³£CPU»òÕßÊÇÒì³£ÄÚ´æÐÅÏ¢'
-        global s_sql_info
         
         cpu_info = {}
         mem_info = {}
@@ -154,21 +157,18 @@ class DbDataOpr(object):
         sql_mem_info = ""
         cpu_info = self.common_data_proc(dict,'CPU')
         mem_info = self.common_data_proc(dict,'MEM')
-        self.how_parse_data(mem_info)
+        if not cpu_info and not mem_info:
+            return True
+        self.show_parse_data(mem_info)
         if cpu_info:
             sql_cpu_info = cpu_info['CPU']
         if mem_info:
             sql_mem_info  = mem_info['MEM']
-        sql_str = "%s(%s,%s,%s,%s)" %(s_sql_info['CPU'],dict['BASE']['dev_id'], \
+        sql_str = "%s(%s,%s,%s,%s)" %(self.sql_info['CPU'],self.dev_id, \
                                            sql_cpu_info,\
                                            sql_mem_info,\
                                            self.record_date)
-        try:
-            sql.sql_exec(sql_str)
-        except:
-            raise ""
-            return False
-        return True
+        return self.exec_sql_opr(sql_str)
         
     def exec_storage_check_table_data(self,dict):
         '´¦Àí´æ´¢Ó²¼þÒì³£'
@@ -179,9 +179,11 @@ class DbDataOpr(object):
         
     def exec_dclog_table_data(self,dict):
         '´¦ÀíÒì³£ÄÚÖÃÊý¾ÝÖÐÐÄÈÕÖ¾'
-        dclog_info = dict['DCLOG_SIZE']
         
+        dclog_info = dict['DCLOG_SIZE']
         for key,value in dclog_info.items():
+            if not value:
+                continue
             str = key.split('_')
             self.record_date = str[1]
             dclog_sql_info = self.get_sql_values(dclog_info,key)
@@ -201,11 +203,10 @@ class DbDataOpr(object):
 
         
         s_except_sql = self.sql_info['EXCEPT'] + s_except_sql
-        print s_except_sql
+     #   print s_except_sql
         
-        sql.sql_exec(s_except_sql)
         
-        return True
+        return self.exec_sql_opr(s_except_sql)
         
     def exec_except_table_data(self,dict):
         '''½«ÓÐÎÊÌâµÄÊý¾Ý·Å½øÒì³£±í'''
@@ -222,20 +223,17 @@ class DbDataOpr(object):
         
         if except_info['MEM'] == 1:
             except_info['CPU'] = 0
-        print 	except_info	
+      #  print 	except_info	
 
-        createTableSql(except_info)
+        self.createTableSql(except_info)
         
         return True	
         
-        
-            #dict
-
 
 if __name__ == '__main__':
-	
-dict = {'CORE_MODULE': {1: 'sf_pcre no insmod', 2: 'led no insmod', 3: 'exclude no insmod', 4: 'bypass no insmod', 5: 'watchdog no insmod', 6: 'dosck_drv no insmod'}, 'CORE_PROCESS': {1: 'fluxctrld no exists', 2: 'smssp no exists', 3: 'sms_proxy no exists'}, 'MEM': {}, 'CORE_CONF': {}, 'ZOMBIE': {1: 'cron.sh', 2: 'cleancore.sh', 3: 'timesync.sh', 4: 'sec_event_check', 5: 'uploadReport.sh'}, 'BASE': {'customer': 'Default authorized user', 'dev_id': '0DD3EB4A', 'device_vervion': 'AF7.0.132 EN Build20160816', 'device_time': '20160820 05:00:02', 'device_plat': '4G2C', 'device_ip': '111.111.112.216', 'hard_plat': 'UNKNOWN', 'crash_time': 'Crashed time:2012-02-14 23:48:41', 'run_time': '0 days', 'storage_plat': 'DISK'}, 'STORAGE_CHECK': {1: 'tmpfs /fwlog/ads/redir_cache tmpfs rw,relatime,size=30720k 0 0', 2: 'tmpfs /var/tmp/kvfilter tmpfs rw,relatime,size=102400k 0 0', 3: 'rootfs / rootfs rw 0 0', 4: '/proc /proc proc rw,relatime 0 0', 5: 'tmpfs /var/run tmpfs rw,relatime,size=2048k 0 0', 6: 'tmpfs /var/tmp/darkchain tmpfs rw,relatime,size=20480k 0 0', 7: 'tmpfs /fwlog/ip_sess_count/often_write tmpfs rw,relatime,size=2048k 0 0', 8: '/dev/sda1 /boot ext3 rw,noatime,errors=continue,data=ordered 0 0', 9: '/dev/sys /sys sysfs rw,relatime 0 0', 10: 'tmpfs /var/often_write tmpfs rw,relatime,size=4096k 0 0', 11: 'shm /dev/shm tmpfs rw,nosuid,nodev,relatime 0 0', 12: 'tmpfs /fwlog/log_data/tmp tmpfs rw,relatime,size=20480k 0 0', 13: '/dev/sda6 /fwlog ext3 rw,noatime,errors=continue,data=ordered 0 0', 14: '/dev/root / ext3 rw,relatime,errors=continue,data=journal 0 0', 15: 'none /dev/pts devpts rw,relatime,gid=5,mode=620 0 0', 16: '/dev/sda3 /fwlib ext3 rw,noatime,errors=continue,data=ordered 0 0', 17: 'tmpfs /fwlog/ads/spider/rtinfo tmpfs rw,relatime,size=2048k 0 0', 18: 'tmpfs /var/often_read tmpfs rw,relatime,size=4096k 0 0', 'capacity': '7', 'type': 'DISK'}, 'OPENED_PORT': {1: 'udp,0,0,0.0.0.0:51111,0.0.0.0:*,', 2: 'tcp,0,0,0.0.0.0:54322,0.0.0.0:*,LISTEN', 3: 'udp,0,0,0.0.0.0:40059,0.0.0.0:*,', 4: 'tcp,0,0,0.0.0.0:850,0.0.0.0:*,LISTEN', 5: 'tcp,0,0,131.166.111.219:9000,131.166.111.218:13830,TIME_WAIT', 6: 'tcp,0,0,0.0.0.0:9000,0.0.0.0:*,LISTEN', 7: 'udp,0,0,0.0.0.0:1813,0.0.0.0:*,', 8: 'tcp,0,0,0.0.0.0:800,0.0.0.0:*,LISTEN', 9: 'tcp,0,0,0.0.0.0:80,0.0.0.0:*,LISTEN', 10: 'raw,90400,0,0.0.0.0:112,0.0.0.0:*,112', 11: 'tcp,0,0,0.0.0.0:8000,0.0.0.0:*,LISTEN', 12: 'tcp,0,0,131.166.111.219:9000,131.166.111.218:13832,TIME_WAIT', 13: 'udp,0,0,0.0.0.0:36146,0.0.0.0:*,', 14: 'tcp,0,0,0.0.0.0:22345,0.0.0.0:*,LISTEN', 15: 'raw,0,0,0.0.0.0:112,0.0.0.0:*,112', 16: 'tcp,0,0,0.0.0.0:443,0.0.0.0:*,LISTEN', 17: 'udp,0,0,0.0.0.0:58983,0.0.0.0:*,', 18: 'tcp,0,0,0.0.0.0:54321,0.0.0.0:*,LISTEN', 19: 'udp,0,0,0.0.0.0:32837,0.0.0.0:*,', 20: 'udp,0,0,0.0.0.0:41485,0.0.0.0:*,', 21: 'tcp,0,0,0.0.0.0:851,0.0.0.0:*,LISTEN', 22: 'udp,0,0,0.0.0.0:51441,0.0.0.0:*,', 23: 'udp,0,0,0.0.0.0:58842,0.0.0.0:*,', 24: 'tcp,0,0,0.0.0.0:51111,0.0.0.0:*,LISTEN', 25: 'udp,0,0,0.0.0.0:1980,0.0.0.0:*,', 26: 'udp,0,0,0.0.0.0:55449,0.0.0.0:*,', 27: 'tcp,0,0,0.0.0.0:85,0.0.0.0:*,LISTEN', 28: 'tcp,0,0,0.0.0.0:65534,0.0.0.0:*,LISTEN', 29: 'tcp,0,0,0.0.0.0:442,0.0.0.0:*,LISTEN', 30: 'tcp,0,0,0.0.0.0:81,0.0.0.0:*,LISTEN', 31: 'tcp,0,0,0.0.0.0:4420,0.0.0.0:*,LISTEN', 32: 'tcp,0,0,131.166.111.219:9000,131.166.111.218:13833,TIME_WAIT', 33: 'tcp,0,0,131.166.111.219:9000,131.166.111.218:13831,TIME_WAIT', 34: 'tcp,0,0,0.0.0.0:8001,0.0.0.0:*,LISTEN', 35: 'udp,0,0,100.100.89.219:43424,8.8.8.8:53,ESTABLISHED'}, 'DCLOG_SIZE': {'DCLOG_20160815': {1: '/fwlog/log_data/fwlog/20160815/frm,160.0K', 2: '/fwlog/log_data/fwlog/20160815/read_status,4.0K', 3: '/fwlog/log_data/fwlog/20160815,168.0K'}, 'DCLOG_20160816': {1: '/fwlog/log_data/fwlog/20160816/frm,160.0K', 2: '/fwlog/log_data/fwlog/20160816/read_status,12.0K', 3: '/fwlog/log_data/fwlog/20160816,208.0K', 4: '/fwlog/log_data/fwlog/20160816/T,32.0K'}, 'DCLOG_20160817': {1: '/fwlog/log_data/fwlog/20160817/frm,160.0K', 2: '/fwlog/log_data/fwlog/20160817/read_status,4.0K', 3: '/fwlog/log_data/fwlog/20160817,168.0K'}, 'DCLOG_20160820': {1: '/fwlog/log_data/fwlog/20160820/frm,160.0K', 2: '/fwlog/log_data/fwlog/20160820/read_status,4.0K', 3: '/fwlog/log_data/fwlog/20160820,168.0K'}, 'DCLOG_20160818': {}, 'DCLOG_20160819': {}}, 'CORE_DUMP': {}, 'CPU': {}, 'ABNORMAL_USER': {}}
-    t 
+    sql.con_db()
+    db_handle = DbDataOpr()
+    dict = {'CORE_MODULE': {1: 'exclude no insmod', 2: 'dosck_drv no insmod', 3: 'sf_pcre no insmod'}, 'CORE_PROCESS': {1: 'fluxctrld no exists'}, 'MEM': {}, 'CORE_CONF': {}, 'ZOMBIE': {1: '[cleancore.sh]', 2: '[sec_event_check]', 3: '[python]'}, 'BASE': {'customer': '\xe8\x81\x94\xe5\x8c\x96\xe7\xa7\x91\xe6\x8a\x80\xe8\x82\xa1\xe4\xbb\xbd\xe6\x9c\x89\xe9\x99\x90\xe5\x85\xac\xe5\x8f\xb8', 'dev_id': '65812D44', 'device_time': '20160810 02:00:01', 'device_plat': '4G2C', 'device_ip': '10.251.251.251', 'hard_plat': 'version=2015.10.19.1003 provider=xinhan type=H61 model=AF-1720', 'crash_time': 'Crashed time:2012-02-14 23:48:41', 'run_time': '0 days', 'storage_plat': 'SSD', 'device_version': ''}, 'STORAGE_CHECK': {1: '/dev/root /orig/dev/sinfor ext3 ro,relatime,errors=continue,data=writeback 0 0', 2: 'tmpfs /fwlog/ip_sess_count/often_write tmpfs rw,relatime,size=2048k 0 0', 3: '/dev/sys /sys sysfs rw,relatime 0 0', 4: 'tmpfs /var/often_write tmpfs rw,relatime,size=4096k 0 0', 5: '/dev/sda6 /fwlog ext3 rw,noatime,errors=continue,data=ordered 0 0', 6: 'tmpfs /var/tmp/kvfilter tmpfs rw,relatime,size=102400k 0 0', 7: '/dev/sda3 /fwlib ext3 rw,noatime,errors=continue,data=ordered 0 0', 8: '/dev/root /orig/lib64 ext3 ro,relatime,errors=continue,data=writeback 0 0', 9: '/dev/root /orig/var ext3 ro,relatime,errors=continue,data=writeback 0 0', 10: 'tmpfs /var/often_read tmpfs rw,relatime,size=4096k 0 0', 11: 'tmpfs /var/run tmpfs rw,relatime,size=2048k 0 0', 12: '/dev/sda3 /usr ext3 rw,noatime,errors=continue,data=ordered 0 0', 13: 'tmpfs /fwlog/log_data/tmp tmpfs rw,relatime,size=20480k 0 0', 14: 'tmpfs /var/tmp/darkchain tmpfs rw,relatime,size=20480k 0 0', 15: '/dev/sda3 /dev/sinfor ext3 rw,noatime,errors=continue,data=ordered 0 0', 16: '/dev/sda3 /sbin ext3 rw,noatime,errors=continue,data=ordered 0 0', 17: '/dev/sda3 /lib64 ext3 rw,noatime,errors=continue,data=ordered 0 0', 18: '/dev/root / ext3 ro,relatime,errors=continue,data=writeback 0 0', 19: 'shm /dev/shm tmpfs rw,nosuid,nodev,relatime 0 0', 20: 'none /dev/pts devpts rw,relatime,gid=5,mode=620 0 0', 21: 'tmpfs /fwlog/ads/spider/rtinfo tmpfs rw,relatime,size=2048k 0 0', 22: '/dev/sda3 /var ext3 rw,noatime,errors=continue,data=ordered 0 0', 23: '/dev/root /orig/etc ext3 ro,relatime,errors=continue,data=writeback 0 0', 24: '/dev/root /orig/bin ext3 ro,relatime,errors=continue,data=writeback 0 0', 25: 'tmpfs /fwlog/ads/redir_cache tmpfs rw,relatime,size=30720k 0 0', 26: '/dev/sda3 /bin ext3 rw,noatime,errors=continue,data=ordered 0 0', 27: '/proc /proc proc rw,relatime 0 0', 28: 'rootfs / rootfs rw 0 0', 29: '/dev/root /orig/sbin ext3 ro,relatime,errors=continue,data=writeback 0 0', 30: '/dev/root /orig/usr ext3 ro,relatime,errors=continue,data=writeback 0 0', 31: '/dev/sda1 /boot ext3 ro,noatime,errors=continue,data=ordered 0 0', 32: '/dev/sda3 /etc ext3 rw,noatime,errors=continue,data=ordered 0 0', 'capacity': '128G', 'type': 'SSD'}, 'OPENED_PORT': {1: 'udp,0,0,0.0.0.0:51111,0.0.0.0:*,', 2: 'tcp,0,0,0.0.0.0:8001,0.0.0.0:*,LISTEN', 3: 'udp,0,0,0.0.0.0:33141,0.0.0.0:*,', 4: 'tcp,0,0,0.0.0.0:54322,0.0.0.0:*,LISTEN', 5: 'tcp,0,1,60.191.148.244:45029,113.105.88.58:80,SYN_SENT', 6: 'udp,0,0,0.0.0.0:1813,0.0.0.0:*,', 7: 'tcp,0,0,0.0.0.0:800,0.0.0.0:*,LISTEN', 8: 'udp,0,0,0.0.0.0:54878,0.0.0.0:*,', 9: 'tcp,0,0,0.0.0.0:80,0.0.0.0:*,LISTEN', 10: 'tcp,0,0,0.0.0.0:8000,0.0.0.0:*,LISTEN', 11: 'tcp,0,0,0.0.0.0:443,0.0.0.0:*,LISTEN', 12: 'tcp,0,0,0.0.0.0:22345,0.0.0.0:*,LISTEN', 13: 'raw,0,0,0.0.0.0:112,0.0.0.0:*,112', 14: 'raw,188800,0,0.0.0.0:112,0.0.0.0:*,112', 15: 'tcp,0,0,0.0.0.0:54321,0.0.0.0:*,LISTEN', 16: 'tcp,0,0,0.0.0.0:851,0.0.0.0:*,LISTEN', 17: 'udp,0,0,0.0.0.0:52000,0.0.0.0:*,', 18: 'tcp,0,0,0.0.0.0:51111,0.0.0.0:*,LISTEN', 19: 'udp,0,0,0.0.0.0:1980,0.0.0.0:*,', 20: 'tcp,0,0,0.0.0.0:85,0.0.0.0:*,LISTEN', 21: 'udp,0,0,0.0.0.0:123,0.0.0.0:*,', 22: 'tcp,0,0,0.0.0.0:4420,0.0.0.0:*,LISTEN', 23: 'tcp,0,0,0.0.0.0:442,0.0.0.0:*,LISTEN', 24: 'udp,0,0,0.0.0.0:811,0.0.0.0:*,', 25: 'udp,0,0,0.0.0.0:48096,0.0.0.0:*,', 26: 'tcp,0,0,0.0.0.0:81,0.0.0.0:*,LISTEN', 27: 'udp,0,0,0.0.0.0:44321,0.0.0.0:*,', 28: 'tcp,0,0,60.191.148.244:39908,183.134.16.90:80,TIME_WAIT', 29: 'udp,0,0,0.0.0.0:51614,0.0.0.0:*,', 30: 'udp,0,0,0.0.0.0:35585,0.0.0.0:*,', 31: 'tcp,0,0,0.0.0.0:850,0.0.0.0:*,LISTEN'}, 'DCLOG_SIZE': {'DCLOG_20160807': {}, 'DCLOG_20160806': {}, 'DCLOG_20160805': {1: '/fwlog/log_data/fwlog/20160805,168.0K', 2: '/fwlog/log_data/fwlog/20160805/read_status,4.0K', 3: '/fwlog/log_data/fwlog/20160805/frm,160.0K'}, 'DCLOG_20160809': {1: '/fwlog/log_data/fwlog/20160809/frm,160.0K', 2: '/fwlog/log_data/fwlog/20160809/C,16.0K', 3: '/fwlog/log_data/fwlog/20160809,216.0K', 4: '/fwlog/log_data/fwlog/20160809/X,20.0K', 5: '/fwlog/log_data/fwlog/20160809/read_status,16.0K'}, 'DCLOG_20160808': {1: '/fwlog/log_data/fwlog/20160808/frm,160.0K', 2: '/fwlog/log_data/fwlog/20160808/read_status,4.0K', 3: '/fwlog/log_data/fwlog/20160808,168.0K'}, 'DCLOG_20160810': {1: '/fwlog/log_data/fwlog/20160810,168.0K', 2: '/fwlog/log_data/fwlog/20160810/read_status,4.0K', 3: '/fwlog/log_data/fwlog/20160810/frm,160.0K'}}, 'CORE_DUMP': {}, 'CPU': {}, 'ABNORMAL_USER': {}}
 	#exec_except_table_data(dict)
-	sql_proc_entry(dict,1)
+    db_handle.sql_proc_entry(dict,1)
 								

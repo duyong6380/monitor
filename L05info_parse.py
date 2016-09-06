@@ -7,10 +7,8 @@ import re
 import logProc as log
 import sqlProc as sql
 import dbDataProc as dbd
-import stateException as ex
 import os
 
-s_module_filename = 'sys_info.txt'
 
 class L05infoParse(object):
     ''''''
@@ -21,13 +19,14 @@ class L05infoParse(object):
     def init_func(self):
         sql.con_db()
         log.init_log()
-    def run(self,dirname):
+        self.db_handle = dbd.DbDataOpr()
+    def run(self,dirname,file):
         '''运行时函数，直接跑逻辑'''
-        file = dirname + self.module_file
+        file = dirname +'/' +self.module_file
         dict_info = {}
         dict_info = self.get_dict_by_cfg(file)
 
-        print 'dict......',dict_info
+#        print 'dict......',dict_info
 
         print '================获取数据已经成功====================='
         if not dict_info :
@@ -45,14 +44,16 @@ class L05infoParse(object):
 
         flag = self.get_except_flag_from_dict(dict_info)
         try:
-            dbd.sql_proc_entry(dict_info , flag)
+            if not self.db_handle:
+                self.db_handle = dbd.DbDataOpr()
+            self.db_handle.sql_proc_entry(dict_info , flag)
         except:
             return False
         return True
 
     def get_dict_by_cfg(self, file):
         '''根据配置文件获取数据，并将数据填充进字典中'''
-        print 'file:',file
+        #print 'file:',file
         cf = self.get_cfg_handle(file)
         section = self.get_sections(cf)
         new_dict = {}
@@ -117,9 +118,8 @@ class L05infoParse(object):
         cnt = int(cf.get(name,"cnt"))
         if cnt == 0:
             return ""
-        for i in range(1,cnt,1):
+        for i in range(1,cnt+1,1):
             key_word = "DCLOG_DATE" + str(i)
-            print 'key_word',key_word
             dclog_size_key =cf.get(name,key_word)
             key_word = "DCLOG_" + dclog_size_key
             dclog_size_info[key_word] = self.common_parse_func(cf,key_word)
@@ -160,7 +160,6 @@ class L05infoParse(object):
             log.error("存储硬件信息获取去出现错误,类型是:",type)
         
         storage_check_info['type'] = type
-        print storage_check_info	
         return storage_check_info
         
     def del_DCLOG_day_sec(self ,section):
@@ -178,7 +177,6 @@ class L05infoParse(object):
         
     def proc_SMART_CTL_info (self ,cf,name):
         key = cf.get(name,'key')
-        print 'key:',key
         return ""
         
     def init_parse_func(self):
@@ -220,7 +218,6 @@ class L05infoParse(object):
         for name in section:  
             try:
                 result_dict[name] = self.cb[name](cf,name)
-                print 'section:%s 获取数据成功' %name
             except:
                 print '可能回调函数不存在，或者是段[%s]不存在' %name
                 result_dict[name] = {}
