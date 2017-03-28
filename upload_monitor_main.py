@@ -1,123 +1,111 @@
 #!/usr/sbin/env python
-#coding=utf-8
+#coding:UTF-8
 
-import commands
+
 import sys
-import os
-import logProc as log
-import getFilename as gfn
-import common
-import re
-import file_proc
-import shutil
 
+from common import module_exec
+from common.aoam_daemon import daemon
+from common.aoam_common import *
+import getopt
+
+s_fh = 0
 
 UPLOAD_PARSE_LOCK_FILE = '/var/lock/upload_monitor.lock'
-s_rootdir = "/var/duyong/"
 
-class UploadParseMain(object):
-    def __init__(self):
-       self.com_handle =  self.init_func()
-       self.root_dir = '/var/duyong/'
-    def parse_entry(self):
-        self.exec_func()
-        self.exit_func()
-    def exit_func(self):
-        pass
-    def exec_func(self):
-        '''¶ÔÔÆ¶ËÏÂÔØµÄÎÄ¼ş½øĞĞ½âÎö×ÜÈë¿Úº¯Êı£¬Ö÷Òª¹¦ÄÜÈçÏÂ£º
-        1¡¢½âÑ¹Êı¾İ
-        2¡¢Õë¶ÔÃ¿¸öÄ¿Â¼µ÷ÓÃÏàÓ¦µÄ½âÎöº¯Êı½øĞĞ½âÎö
-        '''
-        dir_list_info = {}
-        dir_list_info = gfn.GetDirInfo(s_rootdir)
-        #print dir_list_info
-        for dir_key,dir_value in dir_list_info.items():
-            try :
-                self.parse_one_dir_file(dir_key,dir_list_info)
-            except:
-                log.error("func_name[exec_func]Ö´ĞĞ´íÎó" )
-                return False
-        return True		
+def usege():
+    """
+    Breif: è¾“å‡ºå¸®åŠ©ä¿¡æ¯
+    """
+    print('-af    run forground...')
+    print("-h     please input '-af' enter debug mode...")
 
 
-    def get_data_from_cloud(self):
-        ''' ´ÓÔÆ¶Ë»ñÈ¡ĞèÒª½âÎöµÄÊı¾İ,ÔİÊ±²»×ö'''
-        pass
-    def check_db_table_create(self):
-        ''''''
-        pass
-        
-    def init_func(self):
-        '''Ö´ĞĞ½âÎöµÄ³õÊ¼»¯º¯Êı£ºÖ÷Òª¹¦ÄÜÈçÏÂ£º
-        ¢´ÓÔÆ¶Ë×Ô¶¯»ñÈ¡µ±ÌìĞèÒª½âÎöµÄÊı¾İ
-        ¢¼ì²éÏàÓ¦µÄÊı¾İ¿âÊÇ·ñÒÑ¾­´´½¨
-        '''
-        self.get_data_from_cloud()
-        self.check_db_table_create()
-        com_handle = common.Common()
-        return com_handle
-            
-
-    def parse_one_dir_file(self,dir_key ,dir_list_info):
-        '''½âÎöÒ»¸öÄ¿Â¼ÏÂµÄÎÄ¼ş'''
-        for dirname in dir_list_info[dir_key]:
-            FileList = []
-            #print '-------FileList:',FileList
-            
-            print dirname 
-            if dir_key != 'L05info':
-                return True
-            print dir_key 
-            
-            list_file = os.listdir(dirname)
-            print 'list_file:%s , dirname:%s' %(list_file,dirname)
-            new_file = file_proc.merge_mutil_file_to_one(dirname ,list_file)
-            if len(new_file) == 0 :
-                return False
-                
-            print 'new_file:',new_file	
-            print dirname
-            
-            for file in new_file:
-                FileList.append(os.path.join(dirname,file))
-
-            try :
-                print 'FileList:',FileList
-                self.com_handle.common_parse_hook(FileList,dir_key)
-                self.com_handle.delTempFile(FileList)
-                '''
-                if dir_key == 'L05info':
-                    sys.exit(1)
-                '''    
-            except:
-                print "¿¿[%s]¿¿¿¿" %(dir_key)
+def cmd_line_parse(argv):
+    """
+    Breif: å‘½ä»¤è¡Œè§£æï¼Œ-a,-f,-afè¿›å…¥å‰å°æ¨¡å¼
+    """
+    if len(argv) > 1:
+        try:
+            opts, args = getopt.getopt(argv[1:], 'afh', ['help'])
+        except getopt.GetoptError:
+            usege()
+            sys.exit(2)
+        for opt, arg in opts:
+            if opt in ('-a', '-f'):
+                set_run_forground(True)
+            elif opt in ('-h', '--help'):
+                usege()
                 sys.exit(1)
-        return True
-        
-# ÓÃÎÄ¼şËøÊµÏÖ½ø³Ìµ¥Àı, ±£Ö¤µ¥ÀıÔËĞĞ, Èç¹ûÒÑ¾­ÓĞ½ø³Ìµ÷ÓÃ»¹Ã»ÍË³ö£¬¾Í»áÍË³ö
-# func          : ²¶×¥Òì³£µÄ²Ù×÷
-def single_process_run(func):
-	'''²¶×¥ÎÄ¼şËøÒì³££¬ÅĞ¶ÏÊÇ·ñµ¥½ø³Ì'''
-	global UPLOAD_PARSE_LOCK_FILE
-	
-	try:
-		import fcntl
-		f = open(UPLOAD_PARSE_LOCK_FILE, 'w')
-		fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-	except Exception, e:
-		f.close()
-		func_name = func.__name__
-		log.error('func_name:%s ÒÑ¾­´æÔÚÒ»¸öÊµÀıÔÚÔËĞĞ' %func_name)
-		sys.exit(1)
-	func() 
-	fcntl.flock(f, fcntl.LOCK_UN)
-	f.close()
+                
+                
+def aoam_module_load():
+    ''''''
+    log("module load start")
     
-def main():
-    '''ÖÊÁ¿¼à¿Ø½âÎöÖ÷º¯ÊıÈë¿Ú'''
-    parse_handle = UploadParseMain()
-    single_process_run(parse_handle.parse_entry)
+    try:
+        module_exec("")
+    except Exception,err:
+        log("module init failed ")
+        sys.exit(1)
+        
+def run_main():
+    '''
+    brief:ä¸»è¦è¿è¡Œå‡½æ•°å’Œæ§åˆ¶é€»è¾‘ï¼Œè´Ÿè´£åˆå§‹åŒ–å’Œæ‰§è¡Œæ¨¡å—åŠ è½½å‡½æ•°
+    '''
+    try:
+        module_exec("",1)
+    except Exception,err:
+        log("module running failed ")
+        sys.exit(1)
+
+def single_process_run():
+    '''åªå…è®¸å•å®ä¾‹è¿›è¡Œ'''
+    global s_fh
+    try:
+        import fcntl
+        s_fh = open(UPLOAD_PARSE_LOCK_FILE, 'w')
+        fcntl.flock(s_fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except IOError:
+        print('another instance is running...')
+        sys.exit(1)
+
+def aoam_daemon():
+    """
+    Breif: è¿›ç¨‹daemonåŒ–,å¹¶åˆ›å»ºpidæ–‡ä»¶
+    """
+    global s_fh
+    if not is_run_forground():
+        daemon()
+    #  å†™å…¥pidæ–‡ä»¶è¿›ç¨‹å·
+    try:
+        pid = str(os.getpid())
+        s_fh.write("%s\n" % pid)
+        s_fh.flush()
+    except IOError:
+        sys.exit(1)
+        
+def main(argv):
+    '''ä¸»å‡½æ•°æ‰§è¡Œ'''
+    
+    cmd_line_parse(argv)
+    #å•å®ä¾‹è¿è¡Œ
+    single_process_run()
+    
+    #åå°è¿è¡Œ
+    aoam_daemon()
+    
+    #æ¨¡å—åŠ è½½å¹¶åˆå§‹åŒ–
+    aoam_module_load()
+    
+    try:
+        run_main()
+    except Exception, err:
+        log('saas_mainloop error: ', err)
+        return 1
+    return 0
+
 
 if __name__ == '__main__':
-	main()
+    ret = main(sys.argv)
+    sys.exit(ret)
